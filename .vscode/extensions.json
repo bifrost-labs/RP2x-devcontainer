@@ -1,0 +1,16 @@
+{
+  "recommendations": [
+    "davidanson.vscode-markdownlint",
+    "editorconfig.editorconfig",
+    "fill-labs.dependi",
+    "github.vscode-github-actions",
+    "me-dutour-mathieu.vscode-github-actions",
+    "ms-vscode-remote.remote-containers",
+    "pest.pest-ide-tools",
+    "rust-lang.rust-analyzer",
+    "streetsidesoftware.code-spell-checker",
+    "tamasfe.even-better-toml",
+    "usernamehw.errorlens",
+    "vadimcn.vscode-lldb"
+  ]
+}
