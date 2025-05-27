@@ -1,5 +1,4 @@
 {
-  "cSpell.words": [  ],
   "editor.defaultFormatter": "rust-lang.rust-analyzer",
   "editor.formatOnSave": true,
   "rust-analyzer.check.command": "clippy",
@@ -8,5 +7,25 @@
   "lldb.displayFormat": "hex",
   "[pest]": {
     "editor.defaultFormatter": "pest.pest-ide-tools"
-  }
+  },
+  "cSpell.enabled": true,
+  "cSpell.autoFormatConfigFile": true,
+  "cSpell.diagnosticLevelFlaggedWords": "Information",
+  "cSpell.ignorePaths": [".git/", ".vscode/extensions.json", "Cargo.lock", "target/"],
+  "cSpell.words": [
+    "batcat",
+    "blinky",
+    "Buildx",
+    "CLICOLOR",
+    "clippy",
+    "DEFMT",
+    "eabihf",
+    "imageid",
+    "Jenni",
+    "nmagic",
+    "rustc",
+    "Tdefmt",
+    "thumbv",
+    "Tlink"
+  ]
 }

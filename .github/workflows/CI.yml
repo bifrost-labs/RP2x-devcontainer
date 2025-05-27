@@ -30,82 +30,82 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      # - name: Validate Dockerfile
-      #   run: |
-      #     docker info
-      #     echo "Validating Dockerfile"
-      #     docker build --check .devcontainer
+      - name: Validate Dockerfile
+        run: |
+          docker info
+          echo "Validating Dockerfile"
+          docker build --check .
 
-      # - name: Set up Docker Buildx
-      #   uses: docker/setup-buildx-action@v1
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
 
-      # # TODO: for arm64 builds, use a macOS or linux-arm64 runner
-      # # https://docs.github.com/en/actions/using-github-hosted-runners/using-github-hosted-runners/about-github-hosted-runners#supported-runners-and-hardware-resources
-      # # - name: Set up QEMU for
-      # #   uses: docker/setup-qemu-action@v3
+      # TODO: for arm64 builds, use a macOS or linux-arm64 runner
+      # https://docs.github.com/en/actions/using-github-hosted-runners/using-github-hosted-runners/about-github-hosted-runners#supported-runners-and-hardware-resources
+      # - name: Set up QEMU for
+      #   uses: docker/setup-qemu-action@v3
 
-      # - name: Log in to GH container registry
-      #   if: github.event_name != 'pull_request'
-      #   uses: docker/login-action@v1
-      #   with:
-      #     registry: ghcr.io
-      #     username: ${{ github.actor }}
-      #     password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Log in to GH container registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v1
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      # - name: Extract metadata
-      #   id: meta
-      #   uses: docker/metadata-action@v4
-      #   with:
-      #     images: |
-      #       ghcr.io/${{ github.REPOSITORY }}/${{ env.IMAGE_NAME }}
-      #     tags: |
-      #       type=edge,branch=main
-      #       type=ref,event=branch
-      #       type=ref,event=pr
-      #       type=schedule,pattern={{date 'YYYYMMDD'}}
-      #       type=semver,pattern={{version}}
-      #       type=semver,pattern={{major}}.{{minor}}
-      #       type=semver,pattern={{major}}
-      #       type=sha
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: |
+            ghcr.io/${{ github.REPOSITORY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=edge,branch=main
+            type=ref,event=branch
+            type=ref,event=pr
+            type=schedule,pattern={{date 'YYYYMMDD'}}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha
 
-      # - name: Build and push Docker image
-      #   id: build
-      #   uses: docker/build-push-action@v2
-      #   with:
-      #     context: .devcontainer
-      #     push: ${{ github.event_name != 'pull_request' }}
-      #     tags: ${{ steps.meta.outputs.tags }}
-      #     labels: ${{ steps.meta.outputs.labels }}
-      #     # platforms: linux/amd64,linux/arm64
-      #     platforms: linux/amd64
-      #     build-args: |
-      #       RUST_VERSION=${{ env.RUST_VERSION }}
-      #       DEBIAN_VERSION=${{ env.DEBIAN_VERSION }}
-      #     load: true
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
+          build-args: |
+            RUST_VERSION=${{ env.RUST_VERSION }}
+            DEBIAN_VERSION=${{ env.DEBIAN_VERSION }}
+          load: true
 
-      # - name: Save Docker image as tar
-      #   env:
-      #     TAR_NAME: ${{ env.IMAGE_NAME }}-linux-amd64-${{ env.DOCKER_METADATA_OUTPUT_VERSION }}.tar
-      #   run: |
-      #     echo "--- Saving Docker image to out/images/${{ env.TAR_NAME }}"
-      #     docker image ls
-      #     docker image inspect ${{ steps.build.outputs.imageid }}
-      #     mkdir -p out/images
-      #     docker image save ${{ steps.build.outputs.imageid }} -o out/images/${{ env.TAR_NAME }}
+      - name: Save Docker image as tar
+        env:
+          TAR_NAME: ${{ env.IMAGE_NAME }}-linux-amd64-${{ env.DOCKER_METADATA_OUTPUT_VERSION }}.tar
+        run: |
+          echo "--- Saving Docker image to out/images/${{ env.TAR_NAME }}"
+          docker image ls
+          docker image inspect ${{ steps.build.outputs.imageid }}
+          mkdir -p out/images
+          docker image save ${{ steps.build.outputs.imageid }} -o out/images/${{ env.TAR_NAME }}
 
-      # - name: Upload docker images
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: docker-images-${{ env.DOCKER_METADATA_OUTPUT_VERSION }}
-      #     path: out/images/
-      #     retention-days: 3
+      - name: Upload docker images
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-images-${{ env.DOCKER_METADATA_OUTPUT_VERSION }}
+          path: out/images/
+          retention-days: 3
 
-      # - name: Validate Docker image
-      #   env:
-      #     IMAGE_ID: ${{ steps.build.outputs.imageid }}
-      #   run: |
-      #     echo "Testing the Docker image ${{ env.IMAGE_ID}}"
-      #     docker run --rm ${{ env.IMAGE_ID }} rustc --version
-      #     docker run --rm ${{ env.IMAGE_ID }} cargo --version
-      #     sudo chown -R 1000:1000 ${{ github.WORKSPACE }}/.devcontainer/test/
-      #     docker run --rm -w /home/vscode/test/blinky -v ${{ github.WORKSPACE }}/.devcontainer/test/:/home/vscode/test/ ${{ env.IMAGE_ID}} cargo build --release
+      - name: Validate Docker image
+        env:
+          IMAGE_ID: ${{ steps.build.outputs.imageid }}
+        run: |
+          echo "Testing the Docker image ${{ env.IMAGE_ID}}"
+          docker run --rm ${{ env.IMAGE_ID }} rustc --version
+          docker run --rm ${{ env.IMAGE_ID }} cargo --version
+          sudo chown -R 1000:1000 ${{ github.WORKSPACE }}/test/
+          docker run --rm -w /home/vscode/test/blinky -v ${{ github.WORKSPACE }}/test/:/home/vscode/test/ ${{ env.IMAGE_ID}} cargo build --release
