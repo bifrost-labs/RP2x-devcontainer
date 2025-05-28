@@ -15,7 +15,16 @@ on:
 
 jobs:
   build-and-push:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+        - os: ubuntu-latest
+          arch: amd64
+        - os: ubuntu-24.04-arm
+          arch: arm64
+
+    runs-on: ${{ matrix.platform.os }}
     permissions:
       attestations: write
       contents: read
@@ -38,11 +47,6 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
-
-      # TODO: for arm64 builds, use a macOS or linux-arm64 runner
-      # https://docs.github.com/en/actions/using-github-hosted-runners/using-github-hosted-runners/about-github-hosted-runners#supported-runners-and-hardware-resources
-      # - name: Set up QEMU for
-      #   uses: docker/setup-qemu-action@v3
 
       - name: Log in to GH container registry
         if: github.event_name != 'pull_request'
@@ -76,8 +80,7 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # platforms: linux/amd64,linux/arm64
-          platforms: linux/amd64
+          platforms: linux/${{ matrix.platform.arch }}
           build-args: |
             RUST_VERSION=${{ env.RUST_VERSION }}
             DEBIAN_VERSION=${{ env.DEBIAN_VERSION }}
@@ -85,9 +88,10 @@ jobs:
 
       - name: Save Docker image as tar
         env:
-          TAR_NAME: ${{ env.IMAGE_NAME }}-linux-amd64-${{ env.DOCKER_METADATA_OUTPUT_VERSION }}.tar
+          TAR_NAME: ${{ env.IMAGE_NAME }}-linux-${{ matrix.platform.arch }}-${{ env.DOCKER_METADATA_OUTPUT_VERSION }}.tar
         run: |
           echo "--- Saving Docker image to out/images/${{ env.TAR_NAME }}"
+          echo "artifactName=${{ env.TAR_NAME }}" >> $GITHUB_ENV
           docker image ls
           docker image inspect ${{ steps.build.outputs.imageid }}
           mkdir -p out/images
@@ -96,7 +100,7 @@ jobs:
       - name: Upload docker images
         uses: actions/upload-artifact@v4
         with:
-          name: docker-images-${{ env.DOCKER_METADATA_OUTPUT_VERSION }}
+          name: ${{ env.artifactName }}
           path: out/images/
           retention-days: 3
 
