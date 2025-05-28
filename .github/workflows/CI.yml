@@ -15,7 +15,15 @@ on:
 
 jobs:
   build-and-push:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        platform:
+        - os: ubuntu-latest
+          arch: amd64
+        - os: ubuntu-24.04-arm
+          arch: arm64
+
+    runs-on: ${{ matrix.platform.os }}
     permissions:
       attestations: write
       contents: read
@@ -38,11 +46,6 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
-
-      # TODO: for arm64 builds, use a macOS or linux-arm64 runner
-      # https://docs.github.com/en/actions/using-github-hosted-runners/using-github-hosted-runners/about-github-hosted-runners#supported-runners-and-hardware-resources
-      # - name: Set up QEMU for
-      #   uses: docker/setup-qemu-action@v3
 
       - name: Log in to GH container registry
         if: github.event_name != 'pull_request'
@@ -76,8 +79,7 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # platforms: linux/amd64,linux/arm64
-          platforms: linux/amd64
+          platforms: linux/${{ matrix.platform.arch }}
           build-args: |
             RUST_VERSION=${{ env.RUST_VERSION }}
             DEBIAN_VERSION=${{ env.DEBIAN_VERSION }}
