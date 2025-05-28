@@ -87,7 +87,7 @@ jobs:
 
       - name: Save Docker image as tar
         env:
-          TAR_NAME: ${{ env.IMAGE_NAME }}-linux-amd64-${{ env.DOCKER_METADATA_OUTPUT_VERSION }}.tar
+          TAR_NAME: ${{ env.IMAGE_NAME }}-linux-${{ matrix.platform.arch }}-${{ env.DOCKER_METADATA_OUTPUT_VERSION }}.tar
         run: |
           echo "--- Saving Docker image to out/images/${{ env.TAR_NAME }}"
           docker image ls
