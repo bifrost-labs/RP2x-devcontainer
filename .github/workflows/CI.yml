@@ -16,6 +16,7 @@ on:
 jobs:
   build-and-push:
     strategy:
+      fail-fast: false
       matrix:
         platform:
         - os: ubuntu-latest
@@ -90,6 +91,7 @@ jobs:
           TAR_NAME: ${{ env.IMAGE_NAME }}-linux-${{ matrix.platform.arch }}-${{ env.DOCKER_METADATA_OUTPUT_VERSION }}.tar
         run: |
           echo "--- Saving Docker image to out/images/${{ env.TAR_NAME }}"
+          echo "artifactName=${{ env.TAR_NAME }}" >> $GITHUB_ENV
           docker image ls
           docker image inspect ${{ steps.build.outputs.imageid }}
           mkdir -p out/images
@@ -98,7 +100,7 @@ jobs:
       - name: Upload docker images
         uses: actions/upload-artifact@v4
         with:
-          name: docker-images-${{ env.DOCKER_METADATA_OUTPUT_VERSION }}
+          name: docker-image-${{ env.artifactName }}
           path: out/images/
           retention-days: 3
 
