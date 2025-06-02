@@ -14,7 +14,32 @@ on:
       - 'v**'
 
 jobs:
-  build-and-push:
+  prepare:
+    runs-on: ubuntu-latest
+    env:
+      IMAGE_NAME: rp2x-rust
+    outputs:
+      IMAGE_NAME: ${{ steps.vars.outputs.IMAGE_NAME }}
+      FULL_IMAGE_NAME: ${{ steps.vars.outputs.FULL_IMAGE_NAME }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate Dockerfile
+        run: |
+          # docker info
+          echo "Validating Dockerfile"
+          docker build --check .
+
+      - name: Calculate global variables
+        id: vars
+        run: |
+          echo "IMAGE_NAME=${{ env.IMAGE_NAME }}" >> $GITHUB_OUTPUT
+          echo "FULL_IMAGE_NAME=${{ github.REPOSITORY }}/${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]' >> $GITHUB_OUTPUT
+
+  build:
+    needs: prepare
     strategy:
       fail-fast: false
       matrix:
@@ -31,25 +56,17 @@ jobs:
       id-token: write
       packages: write
     env:
-      IMAGE_NAME: rp2x-rust
       RUST_VERSION: '1.87.0'   # see: https://hub.docker.com/_/rust
       DEBIAN_VERSION: bookworm
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
-
-      - name: Validate Dockerfile
-        run: |
-          docker info
-          echo "Validating Dockerfile"
-          docker build --check .
+        uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
+        uses: docker/setup-buildx-action@v3
 
       - name: Log in to GH container registry
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@v1
         with:
           registry: ghcr.io
@@ -58,10 +75,91 @@ jobs:
 
       - name: Extract metadata
         id: meta
-        uses: docker/metadata-action@v4
+        uses: docker/metadata-action@v5
         with:
           images: |
-            ghcr.io/${{ github.REPOSITORY }}/${{ env.IMAGE_NAME }}
+            ghcr.io/${{ needs.prepare.outputs.FULL_IMAGE_NAME }}
+
+      - name: Build and push Docker image by digest
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          tags: ghcr.io/${{ needs.prepare.outputs.FULL_IMAGE_NAME }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          platforms: linux/${{ matrix.platform.arch }}
+          build-args: |
+            RUST_VERSION=${{ env.RUST_VERSION }}
+            DEBIAN_VERSION=${{ env.DEBIAN_VERSION }}
+          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
+
+      - name: Export digest
+        id: export
+        run: |
+          mkdir -p out/digests
+          digest="${{ steps.build.outputs.digest }}"
+          digest="${digest#sha256:}"
+          echo "digest=${digest}" >> $GITHUB_OUTPUT
+          echo "Exporting digest: $digest"
+          touch "out/digests/${digest}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ matrix.platform.arch }}
+          path: out/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Validate built Docker image
+        env:
+          FQN: ghcr.io/${{ needs.prepare.outputs.FULL_IMAGE_NAME }}@sha256:${{ steps.export.outputs.digest }}
+        run: |
+          docker pull ${{ env.FQN }}
+          imageId=$(docker image ls -q ${{ env.FQN }})
+          docker image inspect $imageId
+          echo "Testing the Docker image $imageId"
+          docker run --rm $imageId rustc --version
+          docker run --rm $imageId cargo --version
+          sudo chown -R 1000:1000 ${{ github.WORKSPACE }}/test/
+          docker run --rm -w /home/vscode/test/blinky -v ${{ github.WORKSPACE }}/test/:/home/vscode/test/ $imageId cargo build --release
+
+  merge-digests:
+    needs:
+      - prepare
+      - build
+    runs-on: ubuntu-latest
+    permissions:
+      attestations: write
+      contents: read
+      id-token: write
+      packages: write
+
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GH container registry
+        uses: docker/login-action@v1
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Recreate metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ghcr.io/${{ needs.prepare.outputs.FULL_IMAGE_NAME }}
           tags: |
             type=edge,branch=main
             type=ref,event=branch
@@ -70,46 +168,13 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
-            type=sha
 
-      - name: Build and push Docker image
-        id: build
-        uses: docker/build-push-action@v2
-        with:
-          context: .
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          platforms: linux/${{ matrix.platform.arch }}
-          build-args: |
-            RUST_VERSION=${{ env.RUST_VERSION }}
-            DEBIAN_VERSION=${{ env.DEBIAN_VERSION }}
-          load: true
-
-      - name: Save Docker image as tar
-        env:
-          TAR_NAME: ${{ env.IMAGE_NAME }}-linux-${{ matrix.platform.arch }}-${{ env.DOCKER_METADATA_OUTPUT_VERSION }}.tar
+      - name: Create manifest list and push
+        working-directory: ${{ runner.temp }}/digests
         run: |
-          echo "--- Saving Docker image to out/images/${{ env.TAR_NAME }}"
-          echo "artifactName=${{ env.TAR_NAME }}" >> $GITHUB_ENV
-          docker image ls
-          docker image inspect ${{ steps.build.outputs.imageid }}
-          mkdir -p out/images
-          docker image save ${{ steps.build.outputs.imageid }} -o out/images/${{ env.TAR_NAME }}
+          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf 'ghcr.io/${{ needs.prepare.outputs.FULL_IMAGE_NAME }}@sha256:%s ' *)
 
-      - name: Upload docker images
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.artifactName }}
-          path: out/images/
-          retention-days: 3
-
-      - name: Validate Docker image
-        env:
-          IMAGE_ID: ${{ steps.build.outputs.imageid }}
+      - name: Inspect image
         run: |
-          echo "Testing the Docker image ${{ env.IMAGE_ID}}"
-          docker run --rm ${{ env.IMAGE_ID }} rustc --version
-          docker run --rm ${{ env.IMAGE_ID }} cargo --version
-          sudo chown -R 1000:1000 ${{ github.WORKSPACE }}/test/
-          docker run --rm -w /home/vscode/test/blinky -v ${{ github.WORKSPACE }}/test/:/home/vscode/test/ ${{ env.IMAGE_ID}} cargo build --release
+          docker buildx imagetools inspect ghcr.io/${{ needs.prepare.outputs.FULL_IMAGE_NAME }}:${{ steps.meta.outputs.version }}
