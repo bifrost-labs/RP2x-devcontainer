@@ -1,0 +1,17 @@
+{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "bashdb",
+      "request": "launch",
+      "name": "Bash-Debug (simplest configuration)",
+      "program": "${file}",
+      "args": [
+        "ghcr.io/bifrost-labs/rp2x-devcontainer/rp2x-rust@sha256:bf6d533e303a4fe35843f98b223c516600df6e74b61963a6d1461fd1b237c520"
+      ]
+    }
+  ]
+}

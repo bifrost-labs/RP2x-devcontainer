@@ -169,6 +169,18 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
 
+      - name: Build full digest urls
+        id: digests
+        run: |
+          imageRefs=$(printf 'ghcr.io/${{ needs.prepare.outputs.FULL_IMAGE_NAME }}@sha256:%s ' *)
+          imageDigests= $(printf '|' *)
+          # ghcr.io/bifrost-labs/rp2x-devcontainer/rp2x-rust@sha256:bf6d533e303a4fe35843f98b223c516600df6e74b61963a6d1461fd1b237c520
+          # ghcr.io/bifrost-labs/rp2x-devcontainer/rp2x-rust@sha256:263179c20057ebe66d9b5a131f71d5f6120602654bdc44bc14cf2cc3b9912ec8
+          # IFS="|"; read -ra imgArr <<< "$imageDigests"
+          # for img in "${imgArr[@]}"; do
+          #   echo "Image digest: $img"
+          # done
+          # docker buildx imagetools inspect --raw $imageRef | jq -r '.manifests[].digest'
       - name: Create manifest list and push
         working-directory: ${{ runner.temp }}/digests
         run: |
